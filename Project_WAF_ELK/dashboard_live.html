@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAF Security Dashboard - Live</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c14; --bg2: #0d1420; --bg3: #111827; --border: #1e2d40;
+  --accent: #00d4ff; --accent2: #ff4560; --accent3: #00e396;
+  --accent4: #feb019; --accent5: #775dd0;
+  --text: #e2e8f0; --text2: #64748b; --text3: #94a3b8;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Syne', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-mono); min-height: 100vh; overflow-x: hidden; }
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px; pointer-events: none; z-index: 0;
+}
+.container { position: relative; z-index: 1; padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.header-left h1 { font-family: var(--font-display); font-size: 22px; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent3)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header-left p { font-size: 11px; color: var(--text2); margin-top: 3px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.live-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,69,96,0.1); border: 1px solid rgba(255,69,96,0.3); padding: 4px 12px; border-radius: 20px; font-size: 11px; color: var(--accent2); font-weight: 700; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.time-display { font-size: 12px; color: var(--text3); }
+
+.es-status { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 12px; border-radius: 20px; border: 1px solid; }
+.es-status.connected { color: var(--accent3); border-color: rgba(0,227,150,0.3); background: rgba(0,227,150,0.08); }
+.es-status.disconnected { color: var(--accent2); border-color: rgba(255,69,96,0.3); background: rgba(255,69,96,0.08); }
+.es-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 1.2rem; }
+.metric { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; position: relative; overflow: hidden; }
+.metric::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.metric.red::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+.metric.cyan::before { background: linear-gradient(90deg, var(--accent), transparent); }
+.metric.green::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+.metric.amber::before { background: linear-gradient(90deg, var(--accent4), transparent); }
+.metric.purple::before { background: linear-gradient(90deg, var(--accent5), transparent); }
+.metric-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+.metric-val { font-family: var(--font-display); font-size: 28px; font-weight: 800; line-height: 1; }
+.metric.red .metric-val { color: var(--accent2); }
+.metric.cyan .metric-val { color: var(--accent); }
+.metric.green .metric-val { color: var(--accent3); }
+.metric.amber .metric-val { color: var(--accent4); }
+.metric.purple .metric-val { color: var(--accent5); }
+.metric-sub { font-size: 10px; color: var(--text2); margin-top: 5px; }
+
+.main-grid { display: grid; grid-template-columns: 1.8fr 1fr; gap: 12px; margin-bottom: 12px; }
+.bottom-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.card-title { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; }
+.card-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+.badge-red { background: rgba(255,69,96,0.15); color: var(--accent2); }
+.badge-cyan { background: rgba(0,212,255,0.12); color: var(--accent); }
+.badge-green { background: rgba(0,227,150,0.12); color: var(--accent3); }
+
+.chart-wrap { position: relative; width: 100%; height: 160px; }
+
+.attack-bars { display: flex; flex-direction: column; gap: 10px; }
+.bar-item .bar-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.bar-name { font-size: 11px; color: var(--text3); }
+.bar-count { font-size: 11px; font-weight: 700; }
+.bar-track { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+.ip-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.ip-table th { color: var(--text2); font-weight: 500; padding: 6px 0; border-bottom: 1px solid var(--border); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.ip-table td { padding: 7px 0; border-bottom: 1px solid rgba(30,45,64,0.5); vertical-align: middle; }
+.ip-table tr:last-child td { border-bottom: none; }
+.ip-mono { font-family: var(--font-mono); color: var(--accent); font-size: 11px; }
+.status-block { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+.status-blocked { background: rgba(255,69,96,0.15); color: var(--accent2); }
+.status-monitor { background: rgba(254,176,25,0.12); color: var(--accent4); }
+
+.alert-feed { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+.alert-feed::-webkit-scrollbar { width: 3px; }
+.alert-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.alert-item { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px; border-radius: 8px; background: var(--bg3); border-left: 2px solid; animation: slideIn 0.3s ease; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+.alert-item.critical { border-color: var(--accent2); }
+.alert-item.warning { border-color: var(--accent4); }
+.alert-item.info { border-color: var(--accent); }
+.alert-time { font-size: 10px; color: var(--text2); white-space: nowrap; margin-top: 1px; }
+.alert-body { flex: 1; }
+.alert-type { font-size: 10px; font-weight: 700; margin-bottom: 2px; }
+.alert-item.critical .alert-type { color: var(--accent2); }
+.alert-item.warning .alert-type { color: var(--accent4); }
+.alert-item.info .alert-type { color: var(--accent); }
+.alert-desc { font-size: 10px; color: var(--text3); line-height: 1.4; }
+
+.blocked-list { display: flex; flex-direction: column; gap: 6px; }
+.blocked-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,69,96,0.06); border: 1px solid rgba(255,69,96,0.2); border-radius: 8px; }
+.blocked-ip { font-family: var(--font-mono); font-size: 12px; color: var(--accent2); }
+.blocked-meta { font-size: 10px; color: var(--text2); }
+.blocked-time { font-size: 10px; color: var(--text2); }
+.empty-state { font-size: 11px; color: var(--text2); text-align: center; padding: 20px; }
+
+.footer { margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text2); }
+.status-ok { color: var(--accent3); font-weight: 700; }
+
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 13px; border-radius: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid; transition: all 0.2s; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reset { background: rgba(255,69,96,0.1); border-color: rgba(255,69,96,0.4); color: var(--accent2); }
+.btn-reset:hover:not(:disabled) { background: rgba(255,69,96,0.22); }
+.btn-unblock { background: rgba(0,227,150,0.08); border-color: rgba(0,227,150,0.35); color: var(--accent3); font-size: 10px; padding: 3px 9px; border-radius: 6px; }
+.btn-unblock:hover:not(:disabled) { background: rgba(0,227,150,0.18); }
+
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+.modal-overlay.show { display:flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px; max-width: 420px; width: 90%; }
+.modal h3 { font-family: var(--font-display); font-size: 16px; color: var(--accent2); margin-bottom: 10px; }
+.modal p { font-size: 12px; color: var(--text3); line-height: 1.6; margin-bottom: 20px; }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+.btn-confirm { background: rgba(255,69,96,0.15); border-color: rgba(255,69,96,0.5); color: var(--accent2); }
+.btn-confirm:hover { background: rgba(255,69,96,0.3); }
+.btn-cancel { background: var(--bg3); border-color: var(--border); color: var(--text3); }
+.btn-cancel:hover { background: var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <h1>WAF Security Dashboard</h1>
+      <p>Index: waf-logs-* &nbsp;·&nbsp; ModSecurity OWASP CRS 3.3.2 &nbsp;·&nbsp; Auto-refresh 10s</p>
+    </div>
+    <div class="header-right">
+      <div class="es-status disconnected" id="es-status"><div class="es-dot"></div><span id="es-status-text">Connecting...</span></div>
+      <div class="time-display" id="clock">--:--:--</div>
+      <button class="btn btn-reset" id="btn-reset" onclick="confirmReset()">⟳ Reset Lab</button>
+      <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-reset">
+    <div class="modal">
+      <h3>⚠️ Xác nhận Reset Lab</h3>
+      <p>Thao tác này sẽ xóa toàn bộ log tấn công, danh sách IP bị chặn và đưa hệ thống về trạng thái sạch.<br><br>Bạn chắc chắn muốn tiếp tục?</p>
+      <div class="modal-btns">
+        <button class="btn btn-cancel" onclick="closeModal('modal-reset')">Hủy</button>
+        <button class="btn btn-confirm" id="btn-confirm-reset" onclick="doReset()">Xác nhận Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric red"><div class="metric-label">Tổng tấn công</div><div class="metric-val" id="m-total">—</div><div class="metric-sub">Tất cả thời gian</div></div>
+    <div class="metric amber"><div class="metric-label">IP bị chặn</div><div class="metric-val" id="m-blocked">—</div><div class="metric-sub">Auto-blocked</div></div>
+    <div class="metric cyan"><div class="metric-label">IP duy nhất</div><div class="metric-val" id="m-unique">—</div><div class="metric-sub">Unique attackers</div></div>
+    <div class="metric purple"><div class="metric-label">24h gần nhất</div><div class="metric-val" id="m-24h">—</div><div class="metric-sub">Events</div></div>
+    <div class="metric green"><div class="metric-label">WAF Status</div><div class="metric-val" style="font-size:18px;padding-top:4px;">ACTIVE</div><div class="metric-sub">ModSecurity ON</div></div>
+  </div>
+
+  <div class="main-grid">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Timeline tấn công (24h)</span>
+        <span class="card-badge badge-red">Hôm nay</span>
+      </div>
+      <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Phân loại Rule ID</span>
+        <span class="card-badge badge-cyan" id="type-total">— events</span>
+      </div>
+      <div class="attack-bars" id="attack-bars"><div class="empty-state">Đang tải...</div></div>
+    </div>
+  </div>
+
+  <div class="bottom-grid">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Top IP tấn công</span>
+        <span class="card-badge badge-red">Live</span>
+      </div>
+      <table class="ip-table">
+        <thead><tr><th>IP Address</th><th>Requests</th><th>Status</th></tr></thead>
+        <tbody id="ip-tbody"><tr><td colspan="3" class="empty-state">Đang tải...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Alert Feed</span>
+        <span class="card-badge badge-cyan" id="alert-count">0 alerts</span>
+      </div>
+      <div class="alert-feed" id="alert-feed"><div class="empty-state">Đang tải...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">IP đang bị chặn</span>
+        <span class="card-badge badge-red" id="blocked-count">0 IPs</span>
+      </div>
+      <div class="blocked-list" id="blocked-list"><div class="empty-state">Không có IP bị chặn</div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>Elasticsearch: <span class="status-ok" id="footer-es">● Connecting</span> &nbsp;·&nbsp; Auto Blocker: <span class="status-ok">● Active (10s)</span></div>
+    <div>Index: <span style="color:var(--accent)">waf-logs-*</span> · Blocked index: <span style="color:var(--accent4)">waf-blocked-ips</span> · Last update: <span id="last-update">—</span></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const ES_URL = "http://localhost:9201";
+const INDEX = "waf-logs-*";
+const BLOCKED_INDEX = "waf-blocked-ips";
+const COLORS = ["#ff4560","#feb019","#00d4ff","#775dd0","#00e396","#ff6b6b","#4ecdc4"];
+const RULE_NAMES = { "941100":"XSS", "942100":"SQLi", "930100":"LFI", "930110":"Path Traversal", "932160":"RCE", "949110":"Anomaly Score" };
+
+let alertLog = [];
+let knownIPs = new Set();
+let timelineChart = null;
+
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN'); }, 1000);
+
+async function query(index, body) {
+  const res = await fetch(`${ES_URL}/${index}/_search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} on index ${index}`);
+  return res.json();
+}
+
+async function fetchTotalAttacks() {
+  const data = await query(INDEX, { size: 0, query: { match_all: {} } });
+  return data.hits?.total?.value || 0;
+}
+
+async function fetchAttacks24h() {
+  const data = await query(INDEX, { size: 0, query: { range: { "@timestamp": { gte: "now-24h" } } } });
+  return data.hits?.total?.value || 0;
+}
+
+async function fetchUniqueIPs() {
+  const data = await query(INDEX, { size: 0, aggs: { unique: { cardinality: { field: "client_ip.keyword" } } } });
+  return data.aggregations?.unique?.value || 0;
+}
+
+async function fetchTopIPs() {
+  const data = await query(INDEX, {
+    size: 0,
+    aggs: { ips: { terms: { field: "client_ip.keyword", size: 10, order: { _count: "desc" } } } }
+  });
+  return data.aggregations?.ips?.buckets || [];
+}
+
+async function fetchTopRules() {
+  const data = await query(INDEX, {
+    size: 0,
+    aggs: { rules: { terms: { field: "transaction.messages.details.ruleId.keyword", size: 8, order: { _count: "desc" } } } }
+  });
+  return data.aggregations?.rules?.buckets || [];
+}
+
+async function fetchTimeline() {
+  const data = await query(INDEX, {
+    size: 0,
+    query: { range: { "@timestamp": { gte: "now-24h" } } },
+    aggs: { timeline: { date_histogram: { field: "@timestamp", calendar_interval: "1h", min_doc_count: 0 } } }
+  });
+  return data.aggregations?.timeline?.buckets || [];
+}
+
+async function fetchRecentAlerts() {
+  const data = await query(INDEX, {
+    size: 5,
+    sort: [{ "@timestamp": { order: "desc" } }],
+    query: { range: { "@timestamp": { gte: "now-5m" } } },
+    _source: ["client_ip", "transaction.messages", "@timestamp"]
+  });
+  return data.hits?.hits || [];
+}
+
+async function fetchBlockedIPs() {
+  try {
+    const data = await query(BLOCKED_INDEX, {
+      size: 100,
+      query: { match_all: {} },
+      sort: [{ "banned_at": { order: "desc" } }],
+      _source: ["ip", "banned_at", "expire_at", "status"]
+    });
+    return data.hits?.hits || [];
+  } catch (e) {
+
+    console.warn('[BLOCKED] waf-blocked-ips index chưa có hoặc lỗi:', e.message);
+    return [];
+  }
+}
+
+function renderTimeline(buckets) {
+  const labels = buckets.map(b => new Date(b.key_as_string || b.key).getHours() + ':00');
+  const values = buckets.map(b => b.doc_count);
+  if (!timelineChart) {
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    timelineChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Tấn công', data: values, backgroundColor: 'rgba(255,69,96,0.7)', borderRadius: 3 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#64748b', font: { size: 10, family: 'JetBrains Mono' }, boxWidth: 10 } },
+          tooltip: { backgroundColor: '#0d1420', borderColor: '#1e2d40', borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8', titleFont: { family: 'JetBrains Mono', size: 11 }, bodyFont: { family: 'JetBrains Mono', size: 10 } }
+        },
+        scales: {
+          x: { ticks: { color: '#475569', font: { size: 9 }, maxTicksLimit: 12 }, grid: { color: 'rgba(30,45,64,0.5)' } },
+          y: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: 'rgba(30,45,64,0.5)' } }
+        }
+      }
+    });
+  } else {
+    timelineChart.data.labels = labels;
+    timelineChart.data.datasets[0].data = values;
+    timelineChart.update('none');
+  }
+}
+
+function renderRules(buckets) {
+  const container = document.getElementById('attack-bars');
+  if (!buckets.length) { container.innerHTML = '<div class="empty-state">Chưa có data</div>'; return; }
+  const max = buckets[0]?.doc_count || 1;
+  container.innerHTML = buckets.map((b, i) => {
+    const name = RULE_NAMES[b.key] ? `${RULE_NAMES[b.key]} (${b.key})` : b.key;
+    const pct = Math.round(b.doc_count / max * 100);
+    return `<div class="bar-item">
+      <div class="bar-header">
+        <span class="bar-name">${name}</span>
+        <span class="bar-count" style="color:${COLORS[i%COLORS.length]}">${b.doc_count}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${COLORS[i%COLORS.length]};"></div></div>
+    </div>`;
+  }).join('');
+  const total = buckets.reduce((s,b) => s+b.doc_count, 0);
+  document.getElementById('type-total').textContent = `${total} events`;
+}
+
+function renderIPs(buckets, blockedSet) {
+  const tbody = document.getElementById('ip-tbody');
+  if (!buckets.length) { tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Chưa có data</td></tr>'; return; }
+  tbody.innerHTML = buckets.map(b => {
+    const isBlocked = blockedSet.has(b.key);
+    const status = isBlocked
+      ? `<span class="status-block status-blocked">🚫 Blocked</span>`
+      : `<span class="status-block status-monitor">👁 Monitor</span>`;
+    return `<tr>
+      <td class="ip-mono">${b.key}</td>
+      <td style="color:#e2e8f0;font-weight:700;">${b.doc_count}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlerts(hits) {
+  const feed = document.getElementById('alert-feed');
+  const newAlerts = [];
+  hits.forEach(hit => {
+    const id = hit._id;
+    if (!knownIPs.has(id)) {
+      knownIPs.add(id);
+      const ip = hit._source?.client_ip || hit._source?.transaction?.client_ip || '?';
+      const msgs = hit._source?.transaction?.messages || [];
+      const msg = msgs[0]?.message || 'Attack detected';
+      const time = new Date(hit._source['@timestamp']).toLocaleTimeString('vi-VN');
+      newAlerts.push({ id, ip, msg, time, cls: 'critical' });
+    }
+  });
+  newAlerts.forEach(a => {
+    const div = document.createElement('div');
+    div.className = `alert-item ${a.cls}`;
+    div.innerHTML = `
+      <div class="alert-time">${a.time}</div>
+      <div class="alert-body">
+        <div class="alert-type">ATTACK DETECTED</div>
+        <div class="alert-desc">IP: ${a.ip} — ${a.msg}</div>
+      </div>`;
+    feed.insertBefore(div, feed.firstChild);
+    if (feed.children.length > 30) feed.removeChild(feed.lastChild);
+  });
+  if (feed.children.length === 0 || (feed.children.length === 1 && feed.querySelector('.empty-state'))) {
+    feed.innerHTML = '<div class="empty-state">Chưa có alert trong 5 phút gần nhất</div>';
+  }
+  document.getElementById('alert-count').textContent = `${knownIPs.size} alerts`;
+}
+
+function renderBlocked(hits) {
+  const list = document.getElementById('blocked-list');
+  const blockedSet = new Set();
+
+  hits.forEach(h => blockedSet.add(h._source?.ip || h._id));
+
+  document.getElementById('m-blocked').textContent = blockedSet.size;
+  document.getElementById('blocked-count').textContent = `${blockedSet.size} IPs`;
+
+  if (!blockedSet.size) {
+    list.innerHTML = '<div class="empty-state">Không có IP bị chặn</div>';
+    return;
+  }
+
+  list.innerHTML = hits.map(h => {
+    const ip = h._source?.ip || h._id;
+    const bannedAt = h._source?.banned_at
+      ? new Date(h._source.banned_at).toLocaleString('vi-VN')
+      : '—';
+    const expireAt = h._source?.expire_at
+      ? new Date(h._source.expire_at).toLocaleString('vi-VN')
+      : '—';
+    return `
+      <div class="blocked-item">
+        <div>
+          <div class="blocked-ip">${ip}</div>
+          <div class="blocked-meta">Blocked: ${bannedAt}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <div class="blocked-time">Expires:<br>${expireAt}</div>
+          <button class="btn btn-unblock" onclick="doUnblock('${ip}', this)">🔓 Unblock</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return blockedSet; 
+}
+
+function setESStatus(ok) {
+  const el = document.getElementById('es-status');
+  const txt = document.getElementById('es-status-text');
+  const footer = document.getElementById('footer-es');
+  el.className = `es-status ${ok ? 'connected' : 'disconnected'}`;
+  txt.textContent = ok ? 'ES Connected' : 'ES Disconnected';
+  footer.textContent = ok ? '● Connected' : '● Disconnected';
+  footer.style.color = ok ? 'var(--accent3)' : 'var(--accent2)';
+}
+
+
+async function refresh() {
+  try {
+    const [total, total24h, unique, topIPs, topRules, timeline, recentAlerts, blockedHits] = await Promise.all([
+      fetchTotalAttacks(),
+      fetchAttacks24h(),
+      fetchUniqueIPs(),
+      fetchTopIPs(),
+      fetchTopRules(),
+      fetchTimeline(),
+      fetchRecentAlerts(),
+      fetchBlockedIPs(),  
+    ]);
+
+    setESStatus(true);
+
+    document.getElementById('m-total').textContent = total;
+    document.getElementById('m-24h').textContent = total24h;
+    document.getElementById('m-unique').textContent = unique;
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('vi-VN');
+
+    renderTimeline(timeline);
+    renderRules(topRules);
+
+    const blockedSet = renderBlocked(blockedHits) || new Set();
+
+    renderIPs(topIPs, blockedSet);
+    renderAlerts(recentAlerts);
+
+  } catch (e) {
+    setESStatus(false);
+    console.error('ES error:', e);
+  }
+}
+
+const API_URL = "http://localhost:5000";
+
+function confirmReset() {
+  document.getElementById('modal-reset').classList.add('show');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+async function doReset() {
+  const btn = document.getElementById('btn-confirm-reset');
+  btn.disabled = true;
+  btn.textContent = 'Đang reset...';
+  try {
+    const res = await fetch(`${API_URL}/api/clear-all`, { method: 'POST' });
+    const data = await res.json();
+    closeModal('modal-reset');
+    alert(data.message || 'Reset thành công!');
+    refresh();
+  } catch (e) {
+    alert('Lỗi kết nối API server (port 5000). Kiểm tra Flask app đã chạy chưa?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Xác nhận Reset';
+  }
+}
+
+async function doUnblock(ip, btnEl) {
+  if (!confirm(`Gỡ chặn IP ${ip}?`)) return;
+  btnEl.disabled = true;
+  btnEl.textContent = '⏳';
+  try {
+    const res = await fetch(`${API_URL}/api/unblock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip })
+    });
+    const data = await res.json();
+    alert(data.message || `Đã gỡ chặn ${ip}`);
+    refresh();
+  } catch (e) {
+    alert('Lỗi kết nối API server (port 5000). Kiểm tra Flask app đã chạy chưa?');
+    btnEl.disabled = false;
+    btnEl.textContent = '🔓 Unblock';
+  }
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
