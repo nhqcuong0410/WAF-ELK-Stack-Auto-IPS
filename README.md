@@ -38,30 +38,23 @@ Client → Nginx + ModSecivity (WAF) → Ứng dụng web (SV Shop)
 ## 📂 Cấu trúc thư mục
 
 ```
-├── docker-compose.yml
-├── nginx/
-│   └── default.conf.template
-├── modsecurity/
-│   └── rules/
-├── logstash/
-│   └── pipeline/
-├── auto_blocker/
-│   └── auto_blocker.py
-├── dashboard/
-│   └── index.html
-├── sv-shop/              # Ứng dụng web demo có lỗ hổng
-├── scripts/
-│   ├── demo_attack.ps1   # Script mô phỏng tấn công
-│   └── unblock.ps1       # Script gỡ chặn IP
-└── docs/
-    └── architecture-diagram.drawio
+Project_WAF_ELK/
+├── docker-compose.yml       # Cấu hình khởi chạy toàn bộ hệ thống (Docker)
+├── auto_blocker/            # Script tự động phát hiện & chặn IP tấn công
+├── logstash/                # Cấu hình pipeline thu thập log
+├── source_code/             # Mã nguồn chính của hệ thống
+├── waf/                     # Cấu hình Nginx + ModSecurity (WAF)
+├── app_api.py                # API backend phục vụ dashboard/hệ thống
+├── dashboard_live.html      # Dashboard giám sát tấn công theo thời gian thực
+├── demo_attack.ps1          # Script mô phỏng tấn công (SQLi, XSS, Traversal, Command Injection)
+└── unblock.ps1               # Script gỡ chặn IP thủ công
 ```
 
 ## 🚀 Cách chạy hệ thống
 
 ```bash
 git clone https://github.com/nhqcuong0410/WAF-ELK-Stack-Auto-IPS.git
-cd WAF-ELK-Stack-Auto-IPS
+cd WAF-ELK-Stack-Auto-IPS/Project_WAF_ELK
 docker-compose up -d
 ```
 
